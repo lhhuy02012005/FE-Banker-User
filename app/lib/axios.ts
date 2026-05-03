@@ -56,6 +56,7 @@ axiosClient.interceptors.request.use(
     const normalizedGatewayUrl = gatewayUrl.endsWith('/') && gatewayUrl.length > 1
       ? gatewayUrl.slice(0, -1)
       : gatewayUrl;
+    const isRelativeGateway = normalizedGatewayUrl.startsWith('/');
 
     if (config.url && /^\d/.test(config.url)) {
       config.url = `${normalizedGatewayUrl}:${config.url}`;
@@ -64,6 +65,7 @@ axiosClient.interceptors.request.use(
     } else if (
       config.url &&
       config.url.startsWith('/') &&
+      !isRelativeGateway &&
       !config.url.startsWith(`${normalizedGatewayUrl}/`) &&
       config.url !== normalizedGatewayUrl
     ) {
