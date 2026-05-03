@@ -52,13 +52,22 @@ const processQueue = (error: unknown, token: string | null = null) => {
  */
 axiosClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    const gatewayUrl = process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'http://localhost';
+    const gatewayUrl = process.env.NEXT_PUBLIC_API_GATEWAY_URL || '/api';
+    const normalizedGatewayUrl = gatewayUrl.endsWith('/') && gatewayUrl.length > 1
+      ? gatewayUrl.slice(0, -1)
+      : gatewayUrl;
+
     if (config.url && /^\d/.test(config.url)) {
-       config.url = `${gatewayUrl}:${config.url}`;
+      config.url = `${normalizedGatewayUrl}:${config.url}`;
     } else if (config.url && config.url.startsWith(':')) {
-       config.url = `${gatewayUrl}${config.url}`;
-    } else if (config.url && config.url.startsWith('/')) {
-       config.url = `${gatewayUrl}${config.url}`;
+      config.url = `${normalizedGatewayUrl}${config.url}`;
+    } else if (
+      config.url &&
+      config.url.startsWith('/') &&
+      !config.url.startsWith(`${normalizedGatewayUrl}/`) &&
+      config.url !== normalizedGatewayUrl
+    ) {
+      config.url = `${normalizedGatewayUrl}${config.url}`;
     }
 
     const requestUrl = String(config.url || '');
@@ -132,7 +141,7 @@ axiosClient.interceptors.response.use(
         // Cấu hình URL cho Refresh (Giữ nguyên logic URL của Huy)
         const identityPrefix = process.env.NEXT_PUBLIC_IDENTITY_SERVICE_PREFIX || '8080/api';
         const identityPort = process.env.NEXT_PUBLIC_IDENTITY_PORT || '8080';
-        const gatewayUrl = process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'http://localhost';
+        const gatewayUrl = process.env.NEXT_PUBLIC_API_GATEWAY_URL || '/api';
 
         const hasEnvPlaceholder = identityPrefix.includes('${') || identityPrefix.includes('$');
         const effectiveIdentityPrefix = hasEnvPlaceholder ? `:${identityPort}/api` : identityPrefix;
