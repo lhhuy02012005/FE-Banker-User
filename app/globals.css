@@ -1,15 +1,16 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+  --font-sans: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  --font-mono: var(--font-geist-mono);
+  
+  /* Huy có thể định nghĩa thêm màu thương hiệu NeoBank ở đây */
+  --color-neoblue: #2563eb;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+:root {
+  --background: #ffffff;
+  --foreground: #0f172a; /* Đổi sang slate-900 cho text đen sâu */
 }
 
 @media (prefers-color-scheme: dark) {
@@ -19,8 +20,32 @@
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* Base styles */
+@layer base {
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    @apply antialiased;
+  }
+}
+
+/* Custom Components cho NeoBank */
+@layer components {
+  .input-neo {
+    @apply w-full bg-slate-50 border-2 border-transparent rounded-2xl py-4 pl-12 pr-4 outline-none 
+           text-slate-900 font-semibold placeholder:text-slate-400 placeholder:font-normal
+           focus:bg-white focus:border-blue-600 transition-all duration-200;
+  }
+  
+  .icon-neo {
+    /* Huy dùng stroke-width 2.5 trực tiếp trong Lucide icon, 
+       ở đây mình chỉ quản lý vị trí và màu sắc */
+    @apply absolute left-4 top-1/2 -translate-y-1/2 text-slate-900 size-5 
+           transition-colors duration-200;
+  }
+
+  /* Thêm hiệu ứng focus cho container để icon đổi màu theo input */
+  .input-group-neo:focus-within .icon-neo {
+    @apply text-blue-600;
+  }
 }
