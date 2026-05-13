@@ -132,7 +132,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             window.dispatchEvent(new CustomEvent('banker:balance-update', { detail: balanceUpdate }));
           });
         }
-      } catch { router.push('/auth/login'); }
+      } catch (error) {
+        console.error('Dashboard initialization error:', error);
+        router.push('/auth/login');
+      }
     };
     void initialize();
   }, []);
