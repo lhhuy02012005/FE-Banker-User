@@ -12,6 +12,7 @@ import {
   type CampaignResponse,
   type CampaignHistoryDetailResponse,
 } from '@/app/services/campaign.service';
+import { connectCampaignSocket, type CampaignSocketPayload } from '@/app/lib/campaign-socket';
 import { handleError } from '@/app/utils/error-handler';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -298,16 +299,74 @@ export default function CampaignPage() {
   useEffect(() => { void loadCampaigns(page, debouncedKw); }, [page, debouncedKw, loadCampaigns]);
 
   useEffect(() => {
-    // Keep campaign stock and newly-created campaigns fresh without manual reload.
+    // Use socket updates to keep campaign list fresh. Fallback to silent reload if payload doesn't map.
     if (tab !== 'explore') return;
 
-    const interval = window.setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        void loadCampaigns(page, debouncedKw, true);
-      }
-    }, 5000);
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    if (!token) return;
 
-    return () => window.clearInterval(interval);
+    const disconnect = connectCampaignSocket(token, (payload: CampaignSocketPayload) => {
+      const ev = payload.eventType || payload.type || payload.event;
+      if (!ev) {
+        void loadCampaigns(page, debouncedKw, true);
+        return;
+      }
+
+      if (ev === 'CAMPAIGN_CREATED') {
+        // new campaign — refresh list silently
+        void loadCampaigns(page, debouncedKw, true);
+        return;
+      }
+
+      if (ev === 'CAMPAIGN_DELETED') {
+        const id = payload.campaignId || payload.campaign?.id;
+        if (id) {
+          setCampaigns((prev) => prev.filter((c) => c.id !== id));
+        } else {
+          void loadCampaigns(page, debouncedKw, true);
+        }
+        return;
+      }
+
+      if (ev === 'CAMPAIGN_UPDATED') {
+        const updated = payload.campaign;
+        if (updated && updated.id) {
+          setCampaigns((prev) => {
+            if (updated.status && updated.status !== 'ACTIVE') {
+              return prev.filter((c) => c.id !== updated.id);
+            }
+
+            const exists = prev.some((c) => c.id === updated.id);
+            if (!exists) {
+              return [updated as CampaignResponse, ...prev];
+            }
+
+            return prev.map((c) => (c.id === updated.id ? { ...c, ...updated } : c));
+          });
+        } else {
+          void loadCampaigns(page, debouncedKw, true);
+        }
+        return;
+      }
+
+      if (ev === 'CAMPAIGN_JOINED') {
+        const id = payload.campaignId || payload.campaign?.id;
+        const rem = payload.remainingQuantity ?? payload.campaign?.remainingQuantity;
+        if (id && typeof rem === 'number') {
+          let found = false;
+          setCampaigns((prev) => prev.map((c) => {
+            if (c.id === id) { found = true; return { ...c, remainingQuantity: rem }; }
+            return c;
+          }));
+          if (!found) void loadCampaigns(page, debouncedKw, true);
+        } else {
+          void loadCampaigns(page, debouncedKw, true);
+        }
+        return;
+      }
+    });
+
+    return () => disconnect();
   }, [tab, page, debouncedKw, loadCampaigns]);
 
   const handleClaim = async (id: string) => {

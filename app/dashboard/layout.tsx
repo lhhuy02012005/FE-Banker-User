@@ -9,6 +9,7 @@ import { authService } from '../services/auth.service';
 import { getDeviceId } from '../lib/axios';
 import { userService } from '../services/user.service';
 import { connectNotificationSocket } from '../lib/notification-socket';
+import { connectBalanceUpdateSocket, type BalanceUpdatePayload } from '../lib/balance-update-socket';
 
 type AppNotification = {
   id: string;
@@ -63,6 +64,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [notificationPage, setNotificationPage] = useState(1);
+  const [userId, setUserId] = useState<string>('');
+  const [userBalance, setUserBalance] = useState<number>(0);
   const notificationPanelRef = useRef<HTMLDivElement>(null);
   
   const NOTIFICATIONS_PER_PAGE = 5;
@@ -107,17 +110,32 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const initialize = async () => {
       try {
         const profileRes = await userService.getMyProfile();
+        const userId = profileRes.data?.id;
+        const account = await userService.getMyAccount();
+        
+        setUserId(userId || '');
+        setUserBalance(account?.data?.balance || 0);
         setIsReady(true);
         void checkBiometricSetup();
-        if (profileRes.data?.id) {
-          connectNotificationSocket(token, profileRes.data.id, (payload) => {
+        
+        if (userId) {
+          // Connect to notification socket
+          connectNotificationSocket(token, userId, (payload) => {
             window.dispatchEvent(new CustomEvent('banker:notification', { detail: payload }));
+          });
+          
+          // Connect to balance update socket
+          connectBalanceUpdateSocket(token, userId, (balanceUpdate: BalanceUpdatePayload) => {
+            console.log('Balance update received:', balanceUpdate);
+            setUserBalance(balanceUpdate.balance);
+            // Dispatch custom event to notify other components
+            window.dispatchEvent(new CustomEvent('banker:balance-update', { detail: balanceUpdate }));
           });
         }
       } catch { router.push('/auth/login'); }
     };
     void initialize();
-  }, [router, checkBiometricSetup]);
+  }, []);
 
   useEffect(() => {
     setNotifications(readStoredNotifications());
@@ -160,7 +178,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <NavItem icon={<ReceiptCent size={20}/>} label="Transactions" active={pathname.startsWith('/dashboard/transactions')} href="/dashboard/transactions" />
           <NavItem icon={<CreditCard size={20}/>} label="My Cards" active={pathname.startsWith('/dashboard/profile')} href="/dashboard/profile" />
         </nav>
-        <button onClick={() => {localStorage.clear(); router.push('/auth/login');}} className="flex items-center gap-3 p-4 text-red-500 hover:bg-red-50 rounded-2xl font-medium"><LogOut size={20}/> Logout</button>
+        <button onClick={() => {
+          // Chỉ xóa session token, giữ lại device_id / fcmToken / banker_notifications / biometric_enabled
+          localStorage.removeItem('token');
+          router.push('/auth/login');
+        }} className="flex items-center gap-3 p-4 text-red-500 hover:bg-red-50 rounded-2xl font-medium"><LogOut size={20}/> Logout</button>
       </aside>
 
       <main className="flex-1 flex flex-col h-screen overflow-hidden">

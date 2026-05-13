@@ -58,6 +58,8 @@ export const authService = {
     phoneNumber: string;
     credentialId: string;
     signature: string;
+    clientDataJSON: string;
+    authenticatorData: string;
     challenge: string;
   }) => {
     const response = await axiosClient.post(`${SERVICE_PREFIX.IDENTITY}/v1/auth/biometric-login`, {

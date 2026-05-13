@@ -77,7 +77,8 @@ axiosClient.interceptors.request.use(
       requestUrl.includes('/v1/auth/login') ||
       requestUrl.includes('/v1/auth/register') ||
       requestUrl.includes('/v1/auth/biometric-login') ||
-      requestUrl.includes('/v1/auth/refresh');
+      requestUrl.includes('/v1/auth/refresh')||
+      requestUrl.includes('/v1/security/challenge');
     
     if (typeof window !== 'undefined') {
       const token = localStorage.getItem('token');

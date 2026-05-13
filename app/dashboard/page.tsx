@@ -5,6 +5,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Plus, Send, QrCode, ArrowUpRight, Eye, EyeOff, User, MinusCircle, Loader, ArrowLeft, ChevronRight, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import { userService } from '@/app/services/user.service';
+import { type BalanceUpdatePayload } from '@/app/lib/balance-update-socket';
 import { transactionService, type TransactionResponse } from '@/app/services/transaction.service';
 import { formatCurrency, maskAccountNumber, formatTime, getTransactionStatusColor } from '@/app/lib/utils';
 import { toast } from 'react-hot-toast';
@@ -86,59 +87,56 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    let intervalId: ReturnType<typeof setInterval> | null = null;
+    // Listen for balance updates from the global socket dispatched by layout
+    const handleBalanceUpdate = (event: Event) => {
+      const payload = (event as CustomEvent).detail as BalanceUpdatePayload | undefined;
+      if (!payload) return;
+      const nextBalance = Number(payload.balance || 0);
+      const previousBalance = balanceRef.current;
+      const hasChanged = hasLoadedAccountRef.current && nextBalance !== previousBalance;
 
-    const startPolling = () => {
-      if (intervalId !== null) return;
-      intervalId = setInterval(() => {
-        if (document.visibilityState === 'visible' && navigator.onLine) {
-          void refreshBalanceRealtime(true);
-        }
-      }, 10000);
+      setBalance(nextBalance);
+      setAccountNumber(payload.accountId ? accountNumber : accountNumber);
+      setCurrentAccountId(payload.accountId || currentAccountId);
+      balanceRef.current = nextBalance;
+      hasLoadedAccountRef.current = true;
+
+      if (hasChanged) {
+        const diff = nextBalance - previousBalance;
+        const absDiff = formatCurrency(Math.abs(diff));
+        const direction = diff >= 0 ? 'increased' : 'decreased';
+        toast.success(`Balance ${direction}: ${absDiff}`);
+        void loadTransactions(0);
+      }
     };
 
-    const stopPolling = () => {
-      if (intervalId !== null) {
-        clearInterval(intervalId);
-        intervalId = null;
-      }
+    // Keep listening for notification events (separate channel)
+    const handleSocketNotification = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const title = customEvent.detail?.title || 'NeoBank';
+      const body = customEvent.detail?.body || 'You have a new update.';
+      toast(`${title}: ${body}`, { icon: '🔔' });
+      void refreshBalanceRealtime(false);
+      void loadTransactions(0);
     };
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         void refreshBalanceRealtime(false);
-        startPolling();
-      } else {
-        stopPolling();
       }
     };
 
     const handleOnline = () => {
       void refreshBalanceRealtime(false);
-      startPolling();
     };
 
-    const handleNotificationEvent = () => {
-      void refreshBalanceRealtime(false);
-      void loadTransactions(0);
-    };
-
-    const handleSocketNotification = (event: Event) => {
-      const customEvent = event as CustomEvent;
-      const title = customEvent.detail?.title || 'NeoBank';
-      const body = customEvent.detail?.body || 'You have a new update.';
-
-      toast(`${title}: ${body}`, { icon: '🔔' });
-      handleNotificationEvent();
-    };
-
-    startPolling();
+    window.addEventListener('banker:balance-update', handleBalanceUpdate as EventListener);
     window.addEventListener('banker:notification', handleSocketNotification as EventListener);
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('online', handleOnline);
 
     return () => {
-      stopPolling();
+      window.removeEventListener('banker:balance-update', handleBalanceUpdate as EventListener);
       window.removeEventListener('banker:notification', handleSocketNotification as EventListener);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('online', handleOnline);

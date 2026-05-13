@@ -1,6 +1,21 @@
 const getRpId = (): string => {
   if (typeof window === 'undefined') return 'localhost';
-  return process.env.NEXT_PUBLIC_RP_ID || window.location.hostname;
+  
+  // IMPORTANT: RP_ID must match the exact domain user is accessing from.
+  // Fallback hierarchy:
+  // 1. Explicit NEXT_PUBLIC_RP_ID if set AND different from default 'localhost' in Docker context
+  // 2. Always prefer window.location.hostname for accuracy in Docker/production
+  const envRpId = process.env.NEXT_PUBLIC_RP_ID;
+  const currentHostname = window.location.hostname;
+  
+  // If env is set to something other than 'localhost', but it's not our current hostname,
+  // use current hostname (fixes Docker RP_ID mismatch issue)
+  if (envRpId && envRpId !== 'localhost' && envRpId === currentHostname) {
+    return envRpId;
+  }
+  
+  // Otherwise use current hostname for WebAuthn to work correctly
+  return currentHostname;
 };
 
 const encodeText = (value: string): ArrayBuffer => {

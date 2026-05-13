@@ -74,15 +74,38 @@ export default function LoginPage() {
   const handleBiometricLogin = async () => {
     try {
       const challengeRes = await authService.getChallenge();
-      const challenge = challengeRes.data;
-      const biometricData = await biometricUtils.authenticate(challenge);
+      // challengeRes.data is ApiResponse<ChallengeResponse>:
+      // { challenge: string, allowedCredentialIds: string[] }
+      const { challenge, allowedCredentialIds } = challengeRes.data;
 
-      await authService.loginByBiometric({
+      const biometricData = await biometricUtils.authenticate(
+        challenge,
+        allowedCredentialIds
+      );
+
+      const loginPayload = {
         phoneNumber: phone,
         credentialId: biometricData.credentialId,
         signature: biometricData.signature,
         challenge: challenge,
-      });
+        clientDataJSON: biometricData.clientDataJSON,
+        authenticatorData: biometricData.authenticatorData,
+      };
+
+      // DEBUG: Log payload chi tiết trước gửi
+      console.log("=== Biometric Login Payload ===");
+      console.log("clientDataJSON:", loginPayload.clientDataJSON?.substring(0, 50) + "...");
+      console.log("authenticatorData:", loginPayload.authenticatorData?.substring(0, 50) + "...");
+      console.log("signature:", loginPayload.signature?.substring(0, 50) + "...");
+      console.log("challenge:", loginPayload.challenge?.substring(0, 50) + "...");
+      console.log("Full payload:", JSON.stringify(loginPayload));
+
+      const res = await authService.loginByBiometric(loginPayload);
+
+      if (res.data?.authenticated) {
+        localStorage.setItem("token", res.data.accessToken);
+        localStorage.setItem("refreshToken", res.data.refreshToken);
+      }
 
       toast.success("Biometric login successful!");
       router.push("/dashboard");
